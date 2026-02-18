@@ -4,7 +4,7 @@
     "name": "BirdNET Analysis",
     "description": "Standard BirdNET identification using fixed noise profile.",
     "script_file": "core_script.py",
-    "assets": ["noise_profile.wav"],
+    "assets": ["static_noise.wav"],
     "inputs": {
       "accepts": ["audio"],
       "multi": true
