@@ -18,7 +18,11 @@ SNR_DB = 18
 # --- Helper Functions ---
 
 def remove_static_noise(audio, noise_ref, sr=TARGET_SR, snr_db=SNR_DB):
-    """Denoises audio by subtracting a scaled noise reference."""
+    """
+    WARNING: Time-domain subtraction does not effectively denoise audio unless 
+    the noise is perfectly phase-aligned. Consider using spectral gating 
+    (e.g., the `noisereduce` python library) for real acoustic denoising.
+    """
     if len(noise_ref) > len(audio):
         noise_ref = noise_ref[:len(audio)]
     else:
@@ -36,10 +40,11 @@ def remove_static_noise(audio, noise_ref, sr=TARGET_SR, snr_db=SNR_DB):
     return audio - noise_ref_scaled
 
 def extract_datetime_components(filename):
-    """Extracts date and time from the standard filename format."""
+    """Extracts date and time from the standard filename format if present."""
     basename = os.path.basename(filename)
     match_date = re.search(r'_(\d{8})_', basename)
-    match_time = re.search(r'_(\d{6})\.wav$', basename)
+    match_time = re.search(r'_(\d{6})\.(?:wav|webm|mp3)$', basename)
+    
     if match_time and match_date:
         time_str = match_time.group(1)
         date_str = match_date.group(1)
@@ -49,7 +54,7 @@ def extract_datetime_components(filename):
         hour = int(time_str[:2])
         minute = int(time_str[2:4])
         return year, month, day, hour, minute
-    return None, None, None, None, None
+    return "N/A", "N/A", "N/A", "N/A", "N/A"
 
 def analyze_bird_audio(audio_path, noise_clip, analyzer, lat, lon, min_conf):
     """
@@ -86,7 +91,6 @@ def main():
     parser = argparse.ArgumentParser(description="Run BirdNET analysis on a list of audio files.")
     parser.add_argument('--input-files', nargs='+', required=True, help="List of .wav file paths to analyze.")
     parser.add_argument('--output-file', type=str, required=True, help="Path to save the combined CSV output.")
-    parser.add_argument('--static-noise-file', type=str, required=True, help="Path to the static noise .wav file.")
     parser.add_argument('--lat', type=float, required=True, help="Latitude for analysis.")
     parser.add_argument('--lon', type=float, required=True, help="Longitude for analysis.")
     parser.add_argument('--min-confidence', type=float, default=0.5, help="Minimum confidence threshold.")
@@ -96,9 +100,13 @@ def main():
     print("Initializing BirdNET Analyzer...")
     analyzer = Analyzer()
     
-    print(f"Loading static noise clip from: {args.static_noise_file}")
+    # Locate static_noise.wav relative to this script's location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    noise_file_path = os.path.join(script_dir, 'static_noise.wav')
+    
+    print(f"Loading static noise clip from: {noise_file_path}")
     try:
-        noise_clip, _ = librosa.load('static_noise.wav', sr=TARGET_SR)
+        noise_clip, _ = librosa.load(noise_file_path, sr=TARGET_SR)
     except Exception as e:
         print(f"FATAL ERROR: Could not load noise file. {e}", file=sys.stderr)
         sys.exit(1)
@@ -109,9 +117,6 @@ def main():
     for filepath in args.input_files:
         fname = os.path.basename(filepath)
         year, month, day, hour, minute = extract_datetime_components(fname)
-        if hour is None:
-            print(f"Skipping file (unmatched date/time format): {fname}")
-            continue
 
         try:
             detections_df = analyze_bird_audio(filepath, noise_clip, analyzer, args.lat, args.lon, args.min_confidence)
@@ -125,7 +130,7 @@ def main():
                 detections_df["minute"] = minute
                 all_detections.append(detections_df)
             
-            print(f"  Processed: {fname} ({len(detections_df)} detections)")
+            print(f"  Processed: {fname} ({len(detections_df) if not detections_df.empty else 0} detections)")
 
         except Exception as e:
             print(f"  ERROR processing {fname}: {e}", file=sys.stderr)
@@ -136,6 +141,8 @@ def main():
         print(f"--- ✅ Saved detections to: {args.output_file} ---")
     else:
         print("--- No detections found in any files ---")
+        # Write an empty CSV with headers so the watcher doesn't crash expecting a file
+        pd.DataFrame(columns=["filename", "year", "month", "day", "hour", "minute", "common_name", "scientific_name", "confidence"]).to_csv(args.output_file, index=False)
 
 if __name__ == "__main__":
     main()
