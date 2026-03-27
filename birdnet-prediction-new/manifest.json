@@ -1,0 +1,33 @@
+[
+  {
+    "id": "birdnet_pred_v1",
+    "name": "BirdNET Predictions",
+    "description": "Run BirdNET with denoising for Sanjay Van.",
+    "script_file": "birdnet_predictions.py",
+    "assets": ["static_noise.wav"],
+    "inputs": {
+      "accepts": ["audio"],
+      "multi": true
+    },
+    "parameters": [
+      {
+        "id": "lat",
+        "label": "Latitude",
+        "type": "number",
+        "default": 28.53
+      },
+      {
+        "id": "lon",
+        "label": "Longitude",
+        "type": "number",
+        "default": 77.18
+      },
+      {
+        "id": "snr_db",
+        "label": "SNR (dB)",
+        "type": "number",
+        "default": 18
+      }
+    ]
+  }
+]
